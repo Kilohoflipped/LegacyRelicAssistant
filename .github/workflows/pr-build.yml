@@ -17,7 +17,6 @@ jobs:
     build:
         runs-on: windows-2022
         env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
             DALAMUD_RELEASE_ASSET_NAME: latest.7z
             DALAMUD_ARCHIVE_FILENAME: dalamud-latest.7z
