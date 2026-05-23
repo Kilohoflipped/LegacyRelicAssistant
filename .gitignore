@@ -2,3 +2,7 @@
 obj/
 bin/
 *.user
+.idea/
+.DS_Store
+Thumbs.db
+.vscode/settings.json 
