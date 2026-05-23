@@ -6,8 +6,8 @@ if (-not $env:GITHUB_OUTPUT) {
 }
 
 $headers = @{
-    Authorization = "Bearer $env:GITHUB_TOKEN"
-    'User-Agent'  = 'LRA-CI'
+    Accept       = 'application/vnd.github+json'
+    'User-Agent' = 'LRA-CI'
 }
 $release = Invoke-RestMethod `
     -Uri $env:DALAMUD_RELEASE_API_URI `
