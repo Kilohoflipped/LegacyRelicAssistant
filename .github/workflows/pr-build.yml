@@ -1,39 +1,75 @@
-name: Sample PR Builder for SamplePlugin
+name: PR Builder for LegacyRelicAssistant
 
 on:
-  pull_request:
-    branches: [ master ]
+    pull_request:
+        branches: [master]
+    workflow_dispatch:
+
+concurrency:
+    group: pr-build-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+    actions: write
 
 jobs:
+    build:
+        runs-on: windows-2022
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
+            DALAMUD_RELEASE_ASSET_NAME: latest.7z
+            DALAMUD_ARCHIVE_FILENAME: dalamud-latest.7z
 
-  build:
-    runs-on: windows-2022
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v5
 
-    env:
-      Solution_Name: SamplePlugin
+            - name: Install .NET
+              uses: actions/setup-dotnet@v5
+              with:
+                  dotnet-version: 10.0.x
+                  cache: true
+                  cache-dependency-path: |
+                      LegacyRelicAssistant/packages.lock.json
 
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v5
+            # 解析 DalamudCN 最新 Release 的 latest.7z
+            - name: Resolve Dalamud Release
+              id: resolve-dalamud-release
+              shell: pwsh
+              run: ./.github/scripts/pr-build/resolve-dalamud-release.ps1
 
-    - name: Install .NET
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: 10.0.x
+            - name: Cache Dalamud
+              id: cache-dalamud
+              uses: actions/cache@v4
+              with:
+                  path: ${{ runner.temp }}/${{ env.DALAMUD_ARCHIVE_FILENAME }}
+                  key: dalamud-latest-${{ steps.resolve-dalamud-release.outputs.asset_digest }}
 
-    - name: Download Dalamud
-      run: |
-        Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
-        Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
+            - name: Install Dalamud
+              shell: pwsh
+              env:
+                  RUNNER_TEMP: ${{ runner.temp }}
+                  DALAMUD_CACHE_HIT: ${{ steps.cache-dalamud.outputs.cache-hit }}
+                  DALAMUD_DOWNLOAD_URL: ${{ steps.resolve-dalamud-release.outputs.download_url }}
+              run: ./.github/scripts/pr-build/install-dalamud.ps1
 
-    - name: Build with dotnet
-      run: dotnet build --configuration Release
+            - name: Restore NuGet Packages
+              run: dotnet restore --locked-mode
 
-    - name: Store artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: SamplePlugin
-        path: .\SamplePlugin\bin\x64\Release\SamplePlugin\*
-        if-no-files-found: error
-        retention-days: 1
+            - name: Build
+              run: dotnet build -c Release -p:Platform=x64 --no-restore
 
+            - name: Get short SHA
+              id: get-short-sha
+              shell: pwsh
+              run: echo "short_sha=$($env:GITHUB_SHA.Substring(0,7))" >> $env:GITHUB_OUTPUT
+
+            - name: Store Artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: LegacyRelicAssistant-${{ steps.get-short-sha.outputs.short_sha }}
+                  path: ./LegacyRelicAssistant/bin/x64/Release/LegacyRelicAssistant/
+                  if-no-files-found: error
+                  retention-days: 1
