@@ -4,29 +4,42 @@ using Dalamud.Plugin;
 using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
-using SamplePlugin.Windows;
+using LegacyRelicAssistant.Windows;
 
-namespace SamplePlugin;
+namespace LegacyRelicAssistant;
 
-public sealed class Plugin : IDalamudPlugin
+public sealed class LegacyRelicAssistant : IDalamudPlugin
 {
-    [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
-    [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
-    [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
-    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
-    [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
-    [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
-    [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    // 需要用到的服务
+    [PluginService]
+    internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
 
-    private const string CommandName = "/pmycommand";
+    [PluginService]
+    internal static ITextureProvider TextureProvider { get; private set; } = null!;
 
-    public Configuration Configuration { get; init; }
+    [PluginService]
+    internal static ICommandManager CommandManager { get; private set; } = null!;
 
-    public readonly WindowSystem WindowSystem = new("SamplePlugin");
+    [PluginService]
+    internal static IClientState ClientState { get; private set; } = null!;
+
+    [PluginService]
+    internal static IPlayerState PlayerState { get; private set; } = null!;
+
+    [PluginService]
+    internal static IDataManager DataManager { get; private set; } = null!;
+
+    [PluginService]
+    internal static IPluginLog Log { get; private set; } = null!;
+
+    private const string CommandName = "/lra";        // 插件主命令 
+    public Configuration Configuration { get; init; } // 持久化配置
+
+    public readonly WindowSystem WindowSystem = new("LegacyRelicAssistant");
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
 
-    public Plugin()
+    public LegacyRelicAssistant()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -56,7 +69,7 @@ public sealed class Plugin : IDalamudPlugin
 
         // Add a simple message to the log with level set to information
         // Use /xllog to open the log window in-game
-        // Example Output: 00:57:54.959 | INF | [SamplePlugin] ===A cool log message from Sample Plugin===
+        // Example Output: 00:57:54.959 | INF | [LegacyRelicAssistant] ===A cool log message from Lagecy Relic Assistant===
         Log.Information($"===A cool log message from {PluginInterface.Manifest.Name}===");
     }
 
@@ -66,7 +79,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
-        
+
         WindowSystem.RemoveAllWindows();
 
         ConfigWindow.Dispose();
@@ -80,7 +93,7 @@ public sealed class Plugin : IDalamudPlugin
         // In response to the slash command, toggle the display status of our main ui
         MainWindow.Toggle();
     }
-    
+
     public void ToggleConfigUi() => ConfigWindow.Toggle();
     public void ToggleMainUi() => MainWindow.Toggle();
 }

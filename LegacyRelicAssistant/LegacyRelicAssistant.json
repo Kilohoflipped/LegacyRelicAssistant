@@ -1,0 +1,11 @@
+{
+    "Author": "Kilo_Hoflipped",
+    "Name": "Legacy Relic Assistant",
+    "Punchline": "古武魂武助手",
+    "Description": "古武魂武助手，帮助你更轻松地获取古武魂武。使用/lra打开主界面。",
+    "ApplicableVersion": "any",
+    "Tags": [
+        "relic",
+        "weapon"
+    ]
+}

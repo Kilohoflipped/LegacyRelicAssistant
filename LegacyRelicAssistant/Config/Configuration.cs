@@ -1,7 +1,7 @@
 ﻿using Dalamud.Configuration;
 using System;
 
-namespace SamplePlugin;
+namespace LegacyRelicAssistant;
 
 [Serializable]
 public class Configuration : IPluginConfiguration
@@ -11,9 +11,8 @@ public class Configuration : IPluginConfiguration
     public bool IsConfigWindowMovable { get; set; } = true;
     public bool SomePropertyToBeSavedAndWithADefault { get; set; } = true;
 
-    // The below exists just to make saving less cumbersome
     public void Save()
     {
-        Plugin.PluginInterface.SavePluginConfig(this);
+        LegacyRelicAssistant.PluginInterface.SavePluginConfig(this);
     }
 }
