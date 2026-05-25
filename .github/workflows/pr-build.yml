@@ -14,19 +14,22 @@ permissions:
     actions: write
     pull-requests: write
 
+env:
+    DALAMUD_RELEASE_ASSET_NAME: latest.7z
+
 jobs:
     build:
         name: Build
         runs-on: windows-2022
         outputs:
             short_sha: ${{ steps.get-short-sha.outputs.short_sha }}
+            dotnet_sdk_version: ${{ steps.collect-results.outputs.dotnet_sdk_version }}
             dalamud_digest: ${{ steps.resolve-dalamud-release.outputs.asset_digest }}
             dalamud_cache_hit: ${{ steps.cache-dalamud.outputs.cache-hit }}
             format_outcome: ${{ steps.collect-results.outputs.format_outcome }}
             build_outcome: ${{ steps.collect-results.outputs.build_outcome }}
         env:
             DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
-            DALAMUD_RELEASE_ASSET_NAME: latest.7z
             DALAMUD_ARCHIVE_FILENAME: dalamud-latest.7z
 
         steps:
@@ -82,6 +85,7 @@ jobs:
               run: |
                   "format_outcome=${{ steps.format-check.outcome }}" >> $env:GITHUB_OUTPUT
                   "build_outcome=${{ steps.compile.outcome }}" >> $env:GITHUB_OUTPUT
+                  "dotnet_sdk_version=$(dotnet --version)" >> $env:GITHUB_OUTPUT
 
             - name: Get Short SHA
               id: get-short-sha
@@ -113,8 +117,10 @@ jobs:
               shell: bash
               run: |
                   plugin_version=$(grep -oP '(?<=<Version>)[^<]+' LegacyRelicAssistant/LegacyRelicAssistant.csproj | head -1)
+                  dalamud_sdk=$(grep -oP '(?<=Sdk=")[^"]+' LegacyRelicAssistant/LegacyRelicAssistant.csproj | head -1)
                   roslynator_version=$(grep -A3 '"Roslynator.Analyzers"' LegacyRelicAssistant/packages.lock.json | grep -oP '(?<="resolved": ")[^"]+' | head -1)
                   echo "plugin_version=$plugin_version" >> "$GITHUB_OUTPUT"
+                  echo "dalamud_sdk_version=$dalamud_sdk" >> "$GITHUB_OUTPUT"
                   echo "roslynator_version=$roslynator_version" >> "$GITHUB_OUTPUT"
 
             - name: Publish PR Comment
@@ -124,9 +130,11 @@ jobs:
                   FORMAT_OUTCOME: ${{ needs.build.outputs.format_outcome }}
                   BUILD_OUTCOME: ${{ needs.build.outputs.build_outcome }}
                   SHORT_SHA: ${{ needs.build.outputs.short_sha }}
+                  DOTNET_SDK_VERSION: ${{ needs.build.outputs.dotnet_sdk_version }}
                   DALAMUD_DIGEST: ${{ needs.build.outputs.dalamud_digest }}
                   DALAMUD_CACHE_HIT: ${{ needs.build.outputs.dalamud_cache_hit }}
                   PLUGIN_VERSION: ${{ steps.meta.outputs.plugin_version }}
+                  DALAMUD_SDK_VERSION: ${{ steps.meta.outputs.dalamud_sdk_version }}
                   ROSLYNATOR_VERSION: ${{ steps.meta.outputs.roslynator_version }}
               with:
                   script: |
