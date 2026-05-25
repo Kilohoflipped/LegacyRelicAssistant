@@ -16,6 +16,9 @@ permissions:
 
 env:
     DALAMUD_RELEASE_ASSET_NAME: latest.7z
+    DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
+    DALAMUD_ARCHIVE_FILENAME: dalamud-latest.7z
+    DOTNET_VERSION: 10.0.x
 
 jobs:
     build:
@@ -25,12 +28,12 @@ jobs:
             short_sha: ${{ steps.get-short-sha.outputs.short_sha }}
             dotnet_sdk_version: ${{ steps.collect-results.outputs.dotnet_sdk_version }}
             dalamud_digest: ${{ steps.resolve-dalamud-release.outputs.asset_digest }}
-            dalamud_cache_hit: ${{ steps.cache-dalamud.outputs.cache-hit }}
+            dalamud_release_tag: ${{ steps.resolve-dalamud-release.outputs.release_tag }}
+            dalamud_release_url: ${{ steps.resolve-dalamud-release.outputs.release_url }}
+            dalamud_cache_hit: ${{ steps.restore-dalamud-cache.outputs.cache-hit }}
             format_outcome: ${{ steps.collect-results.outputs.format_outcome }}
             build_outcome: ${{ steps.collect-results.outputs.build_outcome }}
-        env:
-            DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
-            DALAMUD_ARCHIVE_FILENAME: dalamud-latest.7z
+            artifact_id: ${{ steps.store-artifacts.outputs.artifact-id }}
 
         steps:
             - name: Checkout
@@ -41,10 +44,9 @@ jobs:
             - name: Install .NET
               uses: actions/setup-dotnet@v5
               with:
-                  dotnet-version: 10.0.x
+                  dotnet-version: ${{ env.DOTNET_VERSION }}
                   cache: true
-                  cache-dependency-path: |
-                      LegacyRelicAssistant/packages.lock.json
+                  cache-dependency-path: "**/packages.lock.json"
 
             # 解析 DalamudCN 最新 Release 的 latest.7z
             - name: Resolve Dalamud Release
@@ -53,7 +55,7 @@ jobs:
               run: ./.github/scripts/pr-build/resolve-dalamud-release.ps1
 
             - name: Restore Dalamud Cache
-              id: cache-dalamud
+              id: restore-dalamud-cache
               uses: actions/cache/restore@v4
               with:
                   path: ${{ runner.temp }}/${{ env.DALAMUD_ARCHIVE_FILENAME }}
@@ -63,16 +65,16 @@ jobs:
               shell: pwsh
               env:
                   RUNNER_TEMP: ${{ runner.temp }}
-                  DALAMUD_CACHE_HIT: ${{ steps.cache-dalamud.outputs.cache-hit }}
+                  DALAMUD_CACHE_HIT: ${{ steps.restore-dalamud-cache.outputs.cache-hit }}
                   DALAMUD_DOWNLOAD_URL: ${{ steps.resolve-dalamud-release.outputs.download_url }}
               run: ./.github/scripts/pr-build/install-dalamud.ps1
 
             - name: Save Dalamud Cache
-              if: steps.cache-dalamud.outputs.cache-hit != 'true'
+              if: steps.restore-dalamud-cache.outputs.cache-hit != 'true'
               uses: actions/cache/save@v4
               with:
                   path: ${{ runner.temp }}/${{ env.DALAMUD_ARCHIVE_FILENAME }}
-                  key: ${{ steps.cache-dalamud.outputs.cache-primary-key }}
+                  key: ${{ steps.restore-dalamud-cache.outputs.cache-primary-key }}
 
             - name: Restore NuGet Packages
               run: dotnet restore --locked-mode
@@ -100,12 +102,13 @@ jobs:
               run: echo "short_sha=$($env:GITHUB_SHA.Substring(0,7))" >> $env:GITHUB_OUTPUT
 
             - name: Store Artifacts
+              id: store-artifacts
               uses: actions/upload-artifact@v4
               with:
                   name: LegacyRelicAssistant-${{ steps.get-short-sha.outputs.short_sha }}
                   path: ./LegacyRelicAssistant/bin/x64/Release/LegacyRelicAssistant/
                   if-no-files-found: error
-                  retention-days: 1
+                  retention-days: 3
 
     report:
         name: PR Summary
@@ -139,10 +142,13 @@ jobs:
                   SHORT_SHA: ${{ needs.build.outputs.short_sha }}
                   DOTNET_SDK_VERSION: ${{ needs.build.outputs.dotnet_sdk_version }}
                   DALAMUD_DIGEST: ${{ needs.build.outputs.dalamud_digest }}
+                  DALAMUD_RELEASE_TAG: ${{ needs.build.outputs.dalamud_release_tag }}
+                  DALAMUD_RELEASE_URL: ${{ needs.build.outputs.dalamud_release_url }}
                   DALAMUD_CACHE_HIT: ${{ needs.build.outputs.dalamud_cache_hit }}
                   PLUGIN_VERSION: ${{ steps.meta.outputs.plugin_version }}
                   DALAMUD_SDK_VERSION: ${{ steps.meta.outputs.dalamud_sdk_version }}
                   ROSLYNATOR_VERSION: ${{ steps.meta.outputs.roslynator_version }}
+                  ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
               with:
                   script: |
                       const publishComment = require('./.github/scripts/pr-build/publish-pr-comment.js');

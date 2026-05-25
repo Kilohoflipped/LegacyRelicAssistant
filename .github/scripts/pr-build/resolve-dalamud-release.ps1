@@ -20,3 +20,5 @@ $digest = if ($asset.digest -match '^sha256:(.+)$') { $Matches[1] } else { $asse
 
 "asset_digest=$digest" >> $env:GITHUB_OUTPUT
 "download_url=$($asset.browser_download_url)" >> $env:GITHUB_OUTPUT
+"release_tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
+"release_url=$($release.html_url)" >> $env:GITHUB_OUTPUT

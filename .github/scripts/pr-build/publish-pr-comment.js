@@ -30,10 +30,22 @@ module.exports = async ({ github, context }) => {
         ].join('\n');
     } else {
         const cacheLabel = process.env.DALAMUD_CACHE_HIT === 'true' ? '命中' : '未命中';
-        const shortSha = process.env.SHORT_SHA?.trim() || context.sha.slice(0, 7);;
-        const artifactLine = buildResult === 'success'
-            ? `📦 **Artifact:** \`LegacyRelicAssistant-${shortSha}\`（在 Workflow 运行页的 Artifacts 中下载）`
-            : '📦 **Artifact:** 未生成（构建未成功）';
+        const shortSha = process.env.SHORT_SHA?.trim() || context.sha.slice(0, 7);
+        const dalamudReleaseTag = process.env.DALAMUD_RELEASE_TAG?.trim();
+        const dalamudReleaseUrl = process.env.DALAMUD_RELEASE_URL?.trim();
+        const dalamudVersionLabel = dalamudReleaseTag
+            ? (dalamudReleaseUrl ? `[${dalamudReleaseTag}](${dalamudReleaseUrl})` : `\`${dalamudReleaseTag}\``)
+            : '/';
+        const artifactName = `LegacyRelicAssistant-${shortSha}`;
+        const artifactId = process.env.ARTIFACT_ID?.trim();
+
+        let artifactLine;
+        if (buildResult === 'success' && artifactId) {
+            const nightlyUrl = `https://nightly.link/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}/artifacts/${artifactId}.zip`;
+            artifactLine = `[${artifactName}](${nightlyUrl})`;
+        } else {
+            artifactLine = '未生成（构建未成功）';
+        }
 
         body = [
             `## ${overallIcon} 代码质量与构建报告`,
@@ -49,18 +61,20 @@ module.exports = async ({ github, context }) => {
             '| 环境项 | 值 |',
             '| --- | --- |',
             `| Commit | \`${shortSha}\` |`,
-            `| 插件版本 | \`${process.env.PLUGIN_VERSION ?? '—'}\` |`,
-            `| .NET SDK | \`${process.env.DOTNET_SDK_VERSION ?? '—'}\` |`,
-            '| Runner | `windows-2022` |',
-            `| Dalamud SDK | \`${process.env.DALAMUD_SDK_VERSION ?? '—'}\` |`,
-            `| Dalamud \`${process.env.DALAMUD_RELEASE_ASSET_NAME ?? '—'}\` digest | \`${(process.env.DALAMUD_DIGEST ?? '—').slice(0, 16)}…\` |`,
+            `| 插件版本 | \`${process.env.PLUGIN_VERSION ?? '/'}\` |`,
+            `| .NET SDK 版本 | \`${process.env.DOTNET_SDK_VERSION ?? '/'}\` |`,
+            '| 操作系统 | `windows-2022` |',
+            `| Dalamud SDK | \`${process.env.DALAMUD_SDK_VERSION ?? '/'}\` |`,
+            `| Dalamud 版本 | ${dalamudVersionLabel} |`,
+            `| Dalamud \`${process.env.DALAMUD_RELEASE_ASSET_NAME ?? '/'}\` 摘要 | \`${(process.env.DALAMUD_DIGEST ?? '—').slice(0, 16)}…\` |`,
             `| Dalamud 缓存 | ${cacheLabel} |`,
-            `| Roslynator 版本 | \`${process.env.ROSLYNATOR_VERSION ?? '—'}\` |`,
+            `| Roslynator 版本 | \`${process.env.ROSLYNATOR_VERSION ?? '/'}\` |`,
             '',
             '### 构建产物',
             '',
             artifactLine,
             '',
+            '---',
             `[查看完整日志](${runUrl})`,
             marker,
         ].join('\n');
