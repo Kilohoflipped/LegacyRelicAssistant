@@ -7,7 +7,7 @@ if (-not $env:GITHUB_OUTPUT) {
 
 $headers = @{
     Accept       = 'application/vnd.github+json'
-    'User-Agent' = 'LRA-CI'
+    'User-Agent' = 'PR-BUILD-CI'
 }
 $release = Invoke-RestMethod `
     -Uri $env:DALAMUD_RELEASE_API_URI `
