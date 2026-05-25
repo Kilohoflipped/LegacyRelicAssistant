@@ -1,7 +1,7 @@
 module.exports = async ({ github, context }) => {
     const marker = '<!-- legacy-relic-assistant-pr-build -->';
     const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
-    const maxDetailLines = 1;
+    const maxDetailLines = 10;
 
     const icon = (outcome) => {
         if (outcome === 'success') return '✅';
@@ -119,7 +119,7 @@ module.exports = async ({ github, context }) => {
     let body;
     if (buildResult === 'cancelled') {
         body = [
-            `## ${overallIcon} 代码质量与构建报告`,
+            `## ${overallIcon} 构建与代码质量构建报告`,
             '',
             '构建已取消。',
             '',
@@ -146,7 +146,7 @@ module.exports = async ({ github, context }) => {
         }
 
         body = [
-            `## ${overallIcon} 代码质量与构建报告`,
+            `## ${overallIcon} 构建与代码质量报告`,
             '',
             '### 检查项执行情况',
             '| 检查项 | 结果 |',

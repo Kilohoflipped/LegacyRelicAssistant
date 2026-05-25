@@ -1,4 +1,4 @@
-name: PR Builder for LegacyRelicAssistant
+name: PR Builder
 
 on:
     pull_request:
@@ -35,6 +35,9 @@ jobs:
             build_outcome: ${{ steps.collect-results.outputs.build_outcome }}
             format_log_b64: ${{ steps.collect-results.outputs.format_log_b64 }}
             build_log_b64: ${{ steps.collect-results.outputs.build_log_b64 }}
+            plugin_version: ${{ steps.collect-results.outputs.plugin_version }}
+            dalamud_sdk_version: ${{ steps.collect-results.outputs.dalamud_sdk_version }}
+            roslynator_version: ${{ steps.collect-results.outputs.roslynator_version }}
             artifact_id: ${{ steps.store-artifacts.outputs.artifact-id }}
 
         steps:
@@ -66,7 +69,6 @@ jobs:
             - name: Install Dalamud
               shell: pwsh
               env:
-                  RUNNER_TEMP: ${{ runner.temp }}
                   DALAMUD_CACHE_HIT: ${{ steps.restore-dalamud-cache.outputs.cache-hit }}
                   DALAMUD_DOWNLOAD_URL: ${{ steps.resolve-dalamud-release.outputs.download_url }}
               run: ./.github/scripts/pr-build/install-dalamud.ps1
@@ -129,18 +131,6 @@ jobs:
               if: needs.build.result != 'cancelled'
               uses: actions/checkout@v5
 
-            - name: Read Metadata
-              if: needs.build.result != 'cancelled'
-              id: meta
-              shell: bash
-              run: |
-                  plugin_version=$(grep -oP '(?<=<Version>)[^<]+' LegacyRelicAssistant/LegacyRelicAssistant.csproj | head -1)
-                  dalamud_sdk=$(grep -oP '(?<=Sdk=")[^"]+' LegacyRelicAssistant/LegacyRelicAssistant.csproj | head -1)
-                  roslynator_version=$(grep -A3 '"Roslynator.Analyzers"' LegacyRelicAssistant/packages.lock.json | grep -oP '(?<="resolved": ")[^"]+' | head -1)
-                  echo "plugin_version=$plugin_version" >> "$GITHUB_OUTPUT"
-                  echo "dalamud_sdk_version=$dalamud_sdk" >> "$GITHUB_OUTPUT"
-                  echo "roslynator_version=$roslynator_version" >> "$GITHUB_OUTPUT"
-
             - name: Publish PR Comment
               uses: actions/github-script@v7
               env:
@@ -155,9 +145,9 @@ jobs:
                   DALAMUD_RELEASE_TAG: ${{ needs.build.outputs.dalamud_release_tag }}
                   DALAMUD_RELEASE_URL: ${{ needs.build.outputs.dalamud_release_url }}
                   DALAMUD_CACHE_HIT: ${{ needs.build.outputs.dalamud_cache_hit }}
-                  PLUGIN_VERSION: ${{ steps.meta.outputs.plugin_version }}
-                  DALAMUD_SDK_VERSION: ${{ steps.meta.outputs.dalamud_sdk_version }}
-                  ROSLYNATOR_VERSION: ${{ steps.meta.outputs.roslynator_version }}
+                  PLUGIN_VERSION: ${{ needs.build.outputs.plugin_version }}
+                  DALAMUD_SDK_VERSION: ${{ needs.build.outputs.dalamud_sdk_version }}
+                  ROSLYNATOR_VERSION: ${{ needs.build.outputs.roslynator_version }}
                   ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
               with:
                   script: |
