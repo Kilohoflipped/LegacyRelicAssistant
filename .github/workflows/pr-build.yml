@@ -52,9 +52,9 @@ jobs:
               shell: pwsh
               run: ./.github/scripts/pr-build/resolve-dalamud-release.ps1
 
-            - name: Cache Dalamud
+            - name: Restore Dalamud Cache
               id: cache-dalamud
-              uses: actions/cache@v4
+              uses: actions/cache/restore@v4
               with:
                   path: ${{ runner.temp }}/${{ env.DALAMUD_ARCHIVE_FILENAME }}
                   key: dalamud-latest-${{ steps.resolve-dalamud-release.outputs.asset_digest }}
@@ -66,6 +66,13 @@ jobs:
                   DALAMUD_CACHE_HIT: ${{ steps.cache-dalamud.outputs.cache-hit }}
                   DALAMUD_DOWNLOAD_URL: ${{ steps.resolve-dalamud-release.outputs.download_url }}
               run: ./.github/scripts/pr-build/install-dalamud.ps1
+
+            - name: Save Dalamud Cache
+              if: steps.cache-dalamud.outputs.cache-hit != 'true'
+              uses: actions/cache/save@v4
+              with:
+                  path: ${{ runner.temp }}/${{ env.DALAMUD_ARCHIVE_FILENAME }}
+                  key: ${{ steps.cache-dalamud.outputs.cache-primary-key }}
 
             - name: Restore NuGet Packages
               run: dotnet restore --locked-mode
