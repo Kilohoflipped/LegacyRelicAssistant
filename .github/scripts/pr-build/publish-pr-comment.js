@@ -58,14 +58,18 @@ module.exports = async ({ github, context }) => {
             .slice(-maxLines);
     };
 
-    const escapeCodeFence = (text) => text.replace(/```/g, '``\\`');
+    const escapeHtml = (text) => text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
     const formatIssueBlock = (title, lines, maxLines) => {
         if (!lines.length) return null;
         const shown = lines.slice(0, maxLines);
         const overflow = lines.length - maxLines;
-        let content = escapeCodeFence(shown.join('\n'));
+        const contentLines = shown.map((line) => `> ${escapeHtml(line)}`);
         if (overflow > 0) {
-            content += `\n\n... 还有 ${overflow} 条，请[查看完整日志](${runUrl})`;
+            contentLines.push(`> ... 还有 ${overflow} 条，请[查看完整日志](${runUrl})`);
         }
         return [
             `#### ${title}`,
@@ -73,9 +77,7 @@ module.exports = async ({ github, context }) => {
             '<details>',
             `<summary>展开详情（共 ${lines.length} 条）</summary>`,
             '',
-            '```text',
-            content,
-            '```',
+            ...contentLines,
             '',
             '</details>',
         ].join('\n');
@@ -118,9 +120,9 @@ module.exports = async ({ github, context }) => {
     if (buildResult === 'cancelled') {
         body = [
             `## ${overallIcon} 代码质量与构建报告`,
-            '---',
+            '',
             '构建已取消。',
-            '---',
+            '',
             `[查看完整日志](${runUrl})`,
             marker,
         ].join('\n');
@@ -145,7 +147,7 @@ module.exports = async ({ github, context }) => {
 
         body = [
             `## ${overallIcon} 代码质量与构建报告`,
-            '---',
+            '',
             '### 检查项执行情况',
             '| 检查项 | 结果 |',
             '| --- | --- |',
@@ -173,7 +175,7 @@ module.exports = async ({ github, context }) => {
             '### 构建产物',
             '',
             artifactLine,
-            '---',
+            '',
             `[查看完整日志](${runUrl})`,
             marker,
         ].join('\n');
