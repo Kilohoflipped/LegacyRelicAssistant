@@ -16,6 +16,12 @@ permissions:
 jobs:
     build:
         runs-on: windows-2022
+        outputs:
+            short_sha: ${{ steps.get-short-sha.outputs.short_sha }}
+            dalamud_digest: ${{ steps.resolve-dalamud-release.outputs.asset_digest }}
+            dalamud_cache_hit: ${{ steps.cache-dalamud.outputs.cache-hit }}
+            format_outcome: ${{ steps.collect-results.outputs.format_outcome }}
+            build_outcome: ${{ steps.collect-results.outputs.build_outcome }}
         env:
             DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
             DALAMUD_RELEASE_ASSET_NAME: latest.7z
@@ -59,10 +65,23 @@ jobs:
             - name: Restore NuGet Packages
               run: dotnet restore --locked-mode
 
-            - name: Build
-              run: dotnet build -c Release -p:Platform=x64 --no-restore
+            - name: Verify Code Formatting
+              id: format-check
+              run: dotnet format --verify-no-changes --verbosity minimal
 
-            - name: Get short SHA
+            - name: Build
+              id: compile
+              run: dotnet build -c Release -p:Platform=x64 --no-restore -warnaserror
+
+            - name: Collect Results
+              if: always()
+              id: collect-results
+              shell: pwsh
+              run: |
+                  "format_outcome=${{ steps.format-check.outcome }}" >> $env:GITHUB_OUTPUT
+                  "build_outcome=${{ steps.compile.outcome }}" >> $env:GITHUB_OUTPUT
+
+            - name: Get Short SHA
               id: get-short-sha
               shell: pwsh
               run: echo "short_sha=$($env:GITHUB_SHA.Substring(0,7))" >> $env:GITHUB_OUTPUT
@@ -74,3 +93,40 @@ jobs:
                   path: ./LegacyRelicAssistant/bin/x64/Release/LegacyRelicAssistant/
                   if-no-files-found: error
                   retention-days: 1
+
+    report:
+        name: PR Summary
+        runs-on: ubuntu-latest
+        needs: build
+
+        if: github.event_name == 'pull_request' && always()
+        permissions:
+            pull-requests: write
+        steps:
+            - name: Checkout
+              if: needs.build.result != 'cancelled'
+              uses: actions/checkout@v5
+
+            - name: Read Metadata
+              if: needs.build.result != 'cancelled'
+              id: meta
+              shell: bash
+              run: |
+                  plugin_version=$(grep -oP '(?<=<Version>)[^<]+' LegacyRelicAssistant/LegacyRelicAssistant.csproj | head -1)
+                  roslynator_version=$(grep -A3 '"Roslynator.Analyzers"' LegacyRelicAssistant/packages.lock.json | grep -oP '(?<="resolved": ")[^"]+' | head -1)
+                  echo "plugin_version=$plugin_version" >> "$GITHUB_OUTPUT"
+                  echo "roslynator_version=$roslynator_version" >> "$GITHUB_OUTPUT"
+
+            - name: Publish PR Comment
+              shell: pwsh
+              env:
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  BUILD_RESULT: ${{ needs.build.result }}
+                  FORMAT_OUTCOME: ${{ needs.build.outputs.format_outcome }}
+                  BUILD_OUTCOME: ${{ needs.build.outputs.build_outcome }}
+                  SHORT_SHA: ${{ needs.build.outputs.short_sha }}
+                  DALAMUD_DIGEST: ${{ needs.build.outputs.dalamud_digest }}
+                  DALAMUD_CACHE_HIT: ${{ needs.build.outputs.dalamud_cache_hit }}
+                  PLUGIN_VERSION: ${{ steps.meta.outputs.plugin_version }}
+                  ROSLYNATOR_VERSION: ${{ steps.meta.outputs.roslynator_version }}
+              run: ./.github/scripts/pr-build/publish-pr-comment.ps1
