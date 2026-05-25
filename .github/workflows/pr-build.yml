@@ -33,6 +33,8 @@ jobs:
             dalamud_cache_hit: ${{ steps.restore-dalamud-cache.outputs.cache-hit }}
             format_outcome: ${{ steps.collect-results.outputs.format_outcome }}
             build_outcome: ${{ steps.collect-results.outputs.build_outcome }}
+            format_log_b64: ${{ steps.collect-results.outputs.format_log_b64 }}
+            build_log_b64: ${{ steps.collect-results.outputs.build_log_b64 }}
             artifact_id: ${{ steps.store-artifacts.outputs.artifact-id }}
 
         steps:
@@ -81,20 +83,26 @@ jobs:
 
             - name: Verify Code Formatting
               id: format-check
-              run: dotnet format --verify-no-changes --verbosity minimal
+              shell: pwsh
+              run: |
+                  dotnet format --verify-no-changes --verbosity minimal 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/format.log"
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
             - name: Build
               id: compile
-              run: dotnet build -c Release -p:Platform=x64 --no-restore -warnaserror
+              shell: pwsh
+              run: |
+                  dotnet build -c Release -p:Platform=x64 --no-restore -warnaserror 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/build.log"
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
             - name: Collect Results
               if: always()
               id: collect-results
               shell: pwsh
-              run: |
-                  "format_outcome=${{ steps.format-check.outcome }}" >> $env:GITHUB_OUTPUT
-                  "build_outcome=${{ steps.compile.outcome }}" >> $env:GITHUB_OUTPUT
-                  "dotnet_sdk_version=$(dotnet --version)" >> $env:GITHUB_OUTPUT
+              env:
+                  FORMAT_OUTCOME: ${{ steps.format-check.outcome }}
+                  BUILD_OUTCOME: ${{ steps.compile.outcome }}
+              run: ./.github/scripts/pr-build/collect-build-results.ps1
 
             - name: Get Short SHA
               id: get-short-sha
@@ -139,6 +147,8 @@ jobs:
                   BUILD_RESULT: ${{ needs.build.result }}
                   FORMAT_OUTCOME: ${{ needs.build.outputs.format_outcome }}
                   BUILD_OUTCOME: ${{ needs.build.outputs.build_outcome }}
+                  FORMAT_LOG_B64: ${{ needs.build.outputs.format_log_b64 }}
+                  BUILD_LOG_B64: ${{ needs.build.outputs.build_log_b64 }}
                   SHORT_SHA: ${{ needs.build.outputs.short_sha }}
                   DOTNET_SDK_VERSION: ${{ needs.build.outputs.dotnet_sdk_version }}
                   DALAMUD_DIGEST: ${{ needs.build.outputs.dalamud_digest }}

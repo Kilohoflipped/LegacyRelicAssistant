@@ -1,6 +1,7 @@
 module.exports = async ({ github, context }) => {
     const marker = '<!-- legacy-relic-assistant-pr-build -->';
     const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+    const maxDetailLines = 1;
 
     const icon = (outcome) => {
         if (outcome === 'success') return '✅';
@@ -10,9 +11,104 @@ module.exports = async ({ github, context }) => {
         return '❓';
     };
 
+    const decodeLog = (encoded) => {
+        if (!encoded?.trim()) return '';
+        try {
+            return Buffer.from(encoded, 'base64').toString('utf8');
+        } catch {
+            return '';
+        }
+    };
+
     const formatOutcomeLabel = (outcome) => {
         const value = outcome ?? 'unknown';
         return value.charAt(0).toUpperCase() + value.slice(1);
+    };
+
+    const extractFormatIssues = (log) => {
+        if (!log?.trim()) return [];
+        const patterns = [
+            /:\s*error\s/i,
+            /:\s*warning\s/i,
+            /IDE0055/i,
+            /needs formatting/i,
+            /would be formatted/i,
+            /formatting violation/i,
+        ];
+        return log
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line && patterns.some((pattern) => pattern.test(line)));
+    };
+
+    const extractBuildIssues = (log) => {
+        if (!log?.trim()) return [];
+        return log
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line && /:\s*error\s/i.test(line));
+    };
+
+    const fallbackExcerpt = (log, maxLines) => {
+        if (!log?.trim()) return [];
+        return log
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .slice(-maxLines);
+    };
+
+    const escapeCodeFence = (text) => text.replace(/```/g, '``\\`');
+    const formatIssueBlock = (title, lines, maxLines) => {
+        if (!lines.length) return null;
+        const shown = lines.slice(0, maxLines);
+        const overflow = lines.length - maxLines;
+        let content = escapeCodeFence(shown.join('\n'));
+        if (overflow > 0) {
+            content += `\n\n... 还有 ${overflow} 条，请[查看完整日志](${runUrl})`;
+        }
+        return [
+            `#### ${title}`,
+            '',
+            '<details>',
+            `<summary>展开详情（共 ${lines.length} 条）</summary>`,
+            '',
+            '```text',
+            content,
+            '```',
+            '',
+            '</details>',
+        ].join('\n');
+    };
+
+    const buildDetailSections = () => {
+        const sections = [];
+
+        if (process.env.FORMAT_OUTCOME === 'failure') {
+            const formatLog = decodeLog(process.env.FORMAT_LOG_B64);
+            let formatIssues = extractFormatIssues(formatLog);
+            if (!formatIssues.length) {
+                formatIssues = fallbackExcerpt(formatLog, maxDetailLines);
+            }
+            const block = formatIssueBlock('dotnet format 详情', formatIssues, maxDetailLines);
+            if (block) sections.push(block);
+        }
+
+        if (process.env.BUILD_OUTCOME === 'failure') {
+            const buildLog = decodeLog(process.env.BUILD_LOG_B64);
+            let buildIssues = extractBuildIssues(buildLog);
+            if (!buildIssues.length) {
+                buildIssues = fallbackExcerpt(buildLog, maxDetailLines);
+            }
+            const block = formatIssueBlock('dotnet build 详情', buildIssues, maxDetailLines);
+            if (block) sections.push(block);
+        }
+
+        if (sections.length) {
+            sections.unshift('', '### 详细检查信息');
+        }
+
+        return sections;
     };
 
     const buildResult = process.env.BUILD_RESULT;
@@ -21,11 +117,11 @@ module.exports = async ({ github, context }) => {
     let body;
     if (buildResult === 'cancelled') {
         body = [
-            `## ${overallIcon} Build 报告`,
-            '',
+            `## ${overallIcon} 代码质量与构建报告`,
+            '---',
             '构建已取消。',
-            '',
-            `[查看 Workflow 运行](${runUrl})`,
+            '---',
+            `[查看完整日志](${runUrl})`,
             marker,
         ].join('\n');
     } else {
@@ -49,12 +145,16 @@ module.exports = async ({ github, context }) => {
 
         body = [
             `## ${overallIcon} 代码质量与构建报告`,
-            '',
+            '---',
             '### 检查项执行情况',
             '| 检查项 | 结果 |',
             '| --- | --- |',
             `| \`dotnet format\` | ${icon(process.env.FORMAT_OUTCOME)} ${formatOutcomeLabel(process.env.FORMAT_OUTCOME)} |`,
             `| \`dotnet build\` | ${icon(process.env.BUILD_OUTCOME)} ${formatOutcomeLabel(process.env.BUILD_OUTCOME)} |`,
+            ...(() => {
+                const detailSections = buildDetailSections();
+                return detailSections.length ? ['', ...detailSections] : [];
+            })(),
             '',
             '### 构建环境',
             '',
@@ -73,7 +173,6 @@ module.exports = async ({ github, context }) => {
             '### 构建产物',
             '',
             artifactLine,
-            '',
             '---',
             `[查看完整日志](${runUrl})`,
             marker,
