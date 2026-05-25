@@ -1,6 +1,8 @@
 #Requires -Version 7.0
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'Get-PrimaryCsproj.ps1')
+
 function Read-LogFile($path) {
     if (-not (Test-Path $path)) { return '' }
     $content = Get-Content $path -Raw -ErrorAction SilentlyContinue
@@ -18,36 +20,23 @@ function ConvertTo-LogOutputBase64($path) {
 }
 
 function Get-ProjectMetadata {
-    $fallback = @{
-        plugin_version      = '/'
-        dalamud_sdk_version = '/'
-        roslynator_version  = '/'
-    }
+    $csprojPath = Get-PrimaryCsprojPath
+    $lockPath = (Join-Path (Split-Path -Path $csprojPath -Parent) 'packages.lock.json') -replace '\\', '/'
 
-    try {
-        $csprojPath = 'LegacyRelicAssistant/LegacyRelicAssistant.csproj'
-        $lockPath = 'LegacyRelicAssistant/packages.lock.json'
-        if (-not (Test-Path -LiteralPath $csprojPath) -or -not (Test-Path -LiteralPath $lockPath)) {
-            return $fallback
-        }
+    [xml]$proj = Get-Content -LiteralPath $csprojPath
+    $sdk = $proj.Project.Sdk
+    $propertyGroups = @($proj.Project.PropertyGroup)
+    $version = ($propertyGroups | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
 
-        [xml]$proj = Get-Content -LiteralPath $csprojPath
-        $sdk = $proj.Project.Sdk
-        $propertyGroups = @($proj.Project.PropertyGroup)
-        $version = ($propertyGroups | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
+    $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json
+    $tfm = ($lock.dependencies.PSObject.Properties | Select-Object -First 1).Name
+    $roslynatorEntry = $lock.dependencies.$tfm.'Roslynator.Analyzers'
+    $roslynator = $roslynatorEntry.resolved
 
-        $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json
-        $tfm = ($lock.dependencies.PSObject.Properties | Select-Object -First 1).Name
-        $roslynator = $lock.dependencies.$tfm.'Roslynator.Analyzers'.resolved
-
-        return @{
-            plugin_version      = if ($version) { $version } else { '/' }
-            dalamud_sdk_version = if ($sdk) { $sdk } else { '/' }
-            roslynator_version  = if ($roslynator) { $roslynator } else { '/' }
-        }
-    }
-    catch {
-        return $fallback
+    return @{
+        plugin_version      = $version
+        dalamud_sdk_version = $sdk
+        roslynator_version  = $roslynator
     }
 }
 

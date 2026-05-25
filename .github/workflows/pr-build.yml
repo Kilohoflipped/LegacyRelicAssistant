@@ -38,6 +38,8 @@ jobs:
             plugin_version: ${{ steps.collect-results.outputs.plugin_version }}
             dalamud_sdk_version: ${{ steps.collect-results.outputs.dalamud_sdk_version }}
             roslynator_version: ${{ steps.collect-results.outputs.roslynator_version }}
+            assembly_name: ${{ steps.resolve-project.outputs.assembly_name }}
+            artifact_name: ${{ steps.resolve-project.outputs.assembly_name }}-${{ steps.get-short-sha.outputs.short_sha }}
             artifact_id: ${{ steps.store-artifacts.outputs.artifact-id }}
 
         steps:
@@ -52,6 +54,11 @@ jobs:
                   dotnet-version: ${{ env.DOTNET_VERSION }}
                   cache: true
                   cache-dependency-path: "**/packages.lock.json"
+
+            - name: Resolve Project
+              id: resolve-project
+              shell: pwsh
+              run: ./.github/scripts/pr-build/resolve-project.ps1
 
             # 解析 DalamudCN 最新 Release 的 latest.7z
             - name: Resolve Dalamud Release
@@ -115,8 +122,8 @@ jobs:
               id: store-artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: LegacyRelicAssistant-${{ steps.get-short-sha.outputs.short_sha }}
-                  path: ./LegacyRelicAssistant/bin/x64/Release/LegacyRelicAssistant/
+                  name: ${{ steps.resolve-project.outputs.assembly_name }}-${{ steps.get-short-sha.outputs.short_sha }}
+                  path: ./${{ steps.resolve-project.outputs.artifact_path }}/
                   if-no-files-found: error
                   retention-days: 3
 
@@ -148,6 +155,7 @@ jobs:
                   PLUGIN_VERSION: ${{ needs.build.outputs.plugin_version }}
                   DALAMUD_SDK_VERSION: ${{ needs.build.outputs.dalamud_sdk_version }}
                   ROSLYNATOR_VERSION: ${{ needs.build.outputs.roslynator_version }}
+                  ARTIFACT_NAME: ${{ needs.build.outputs.artifact_name }}
                   ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
               with:
                   script: |

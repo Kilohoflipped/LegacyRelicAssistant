@@ -1,5 +1,5 @@
 module.exports = async ({ github, context }) => {
-    const marker = '<!-- legacy-relic-assistant-pr-build -->';
+    const marker = '<!-- pr-build-bot-comment-marker -->';
     const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
     const maxDetailLines = 10;
 
@@ -134,7 +134,7 @@ module.exports = async ({ github, context }) => {
         const dalamudVersionLabel = dalamudReleaseTag
             ? (dalamudReleaseUrl ? `[${dalamudReleaseTag}](${dalamudReleaseUrl})` : `\`${dalamudReleaseTag}\``)
             : '/';
-        const artifactName = `LegacyRelicAssistant-${shortSha}`;
+        const artifactName = process.env.ARTIFACT_NAME?.trim();
         const artifactId = process.env.ARTIFACT_ID?.trim();
 
         let artifactLine;
