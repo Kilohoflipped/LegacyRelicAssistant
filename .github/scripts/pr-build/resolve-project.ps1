@@ -4,8 +4,9 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Get-PrimaryCsproj.ps1')
 
 $csproj = Get-PrimaryCsprojPath
-$props = dotnet msbuild $csproj -getProperty:AssemblyName -nologo | ConvertFrom-Json
-$assemblyName = $props.Properties.AssemblyName
+[xml]$proj = Get-Content -LiteralPath $csproj
+$propertyGroups = @($proj.Project.PropertyGroup)
+$assemblyName = ($propertyGroups | ForEach-Object { $_.AssemblyName } | Where-Object { $_ } | Select-Object -First 1)
 if (-not $assemblyName) {
     throw "无法从 $csproj 解析 AssemblyName"
 }
