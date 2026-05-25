@@ -176,6 +176,8 @@ module.exports = async ({ github, context }) => {
             '',
             artifactLine,
             '',
+            '---',
+            '',
             `[查看完整日志](${runUrl})`,
             marker,
         ].join('\n');
