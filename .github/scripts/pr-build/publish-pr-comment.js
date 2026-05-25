@@ -10,13 +10,18 @@ module.exports = async ({ github, context }) => {
         return '❓';
     };
 
+    const formatOutcomeLabel = (outcome) => {
+        const value = outcome ?? 'unknown';
+        return value.charAt(0).toUpperCase() + value.slice(1);
+    };
+
     const buildResult = process.env.BUILD_RESULT;
     const overallIcon = buildResult === 'success' ? '✅' : buildResult === 'cancelled' ? '🚫' : '❌';
 
     let body;
     if (buildResult === 'cancelled') {
         body = [
-            `## ${overallIcon} Legacy Relic Assistant - CI 报告`,
+            `## ${overallIcon} Build 报告`,
             '',
             '构建已取消。',
             '',
@@ -25,31 +30,34 @@ module.exports = async ({ github, context }) => {
         ].join('\n');
     } else {
         const cacheLabel = process.env.DALAMUD_CACHE_HIT === 'true' ? '命中' : '未命中';
-        const shortSha = process.env.SHORT_SHA ?? context.sha.slice(0, 7);
+        const shortSha = process.env.SHORT_SHA?.trim() || context.sha.slice(0, 7);;
         const artifactLine = buildResult === 'success'
             ? `📦 **Artifact:** \`LegacyRelicAssistant-${shortSha}\`（在 Workflow 运行页的 Artifacts 中下载）`
             : '📦 **Artifact:** 未生成（构建未成功）';
 
         body = [
-            `## ${overallIcon} Legacy Relic Assistant - CI 报告`,
+            `## ${overallIcon} 代码质量与构建报告`,
             '',
+            '### 检查项执行情况',
             '| 检查项 | 结果 |',
             '| --- | --- |',
-            `| \`dotnet format --verify-no-changes\` | ${icon(process.env.FORMAT_OUTCOME)} ${process.env.FORMAT_OUTCOME ?? 'unknown'} |`,
-            `| \`dotnet build\` (Release, x64, -warnaserror) | ${icon(process.env.BUILD_OUTCOME)} ${process.env.BUILD_OUTCOME ?? 'unknown'} |`,
+            `| \`dotnet format\` | ${icon(process.env.FORMAT_OUTCOME)} ${formatOutcomeLabel(process.env.FORMAT_OUTCOME)} |`,
+            `| \`dotnet build\` | ${icon(process.env.BUILD_OUTCOME)} ${formatOutcomeLabel(process.env.BUILD_OUTCOME)} |`,
             '',
             '### 构建环境',
             '',
-            '| 项 | 值 |',
+            '| 环境项 | 值 |',
             '| --- | --- |',
             `| Commit | \`${shortSha}\` |`,
-            `| 插件版本 (csproj) | \`${process.env.PLUGIN_VERSION ?? '—'}\` |`,
+            `| 插件版本 | \`${process.env.PLUGIN_VERSION ?? '—'}\` |`,
             '| .NET SDK | `10.0.x` |',
             '| Runner | `windows-2022` |',
             '| Dalamud SDK | `Dalamud.CN.NET.Sdk/15.0.0` |',
             `| Dalamud \`latest.7z\` digest | \`${(process.env.DALAMUD_DIGEST ?? '—').slice(0, 16)}…\` |`,
             `| Dalamud 缓存 | ${cacheLabel} |`,
-            `| Roslynator.Analyzers | \`${process.env.ROSLYNATOR_VERSION ?? '—'}\` |`,
+            `| Roslynator 版本 | \`${process.env.ROSLYNATOR_VERSION ?? '—'}\` |`,
+            '',
+            '### 构建产物',
             '',
             artifactLine,
             '',
