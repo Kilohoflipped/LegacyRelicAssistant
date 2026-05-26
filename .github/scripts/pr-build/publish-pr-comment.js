@@ -140,10 +140,7 @@ module.exports = async ({ github, context }) => {
         let artifactLine;
         if (buildResult === 'success' && artifactName) {
             const nightlyUrl = `https://nightly.link/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}/${encodeURIComponent(artifactName)}.zip`;
-            artifactLine = `[${artifactName}](${nightlyUrl})`;
-        } else if (buildResult === 'success' && artifactId) {
-            const nightlyUrl = `https://nightly.link/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}/artifacts/${artifactId}.zip`;
-            artifactLine = `[${artifactId}](${nightlyUrl})`;
+            artifactLine = `[${artifactName}.zip](${nightlyUrl})`;
         } else {
             artifactLine = '未生成（构建未成功）';
         }
