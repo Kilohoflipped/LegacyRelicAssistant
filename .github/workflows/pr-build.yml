@@ -1,4 +1,4 @@
-name: PR Builder for LegacyRelicAssistant
+name: PR Builder
 
 on:
     pull_request:
@@ -12,14 +12,35 @@ concurrency:
 permissions:
     contents: read
     actions: write
+    pull-requests: write
+
+env:
+    DALAMUD_RELEASE_ASSET_NAME: latest.7z
+    DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
+    DALAMUD_ARCHIVE_FILENAME: dalamud-latest.7z
+    DOTNET_VERSION: 10.0.x
 
 jobs:
     build:
+        name: Build
         runs-on: windows-2022
-        env:
-            DALAMUD_RELEASE_API_URI: https://api.github.com/repos/Dalamud-DailyRoutines/Dalamud/releases/latest
-            DALAMUD_RELEASE_ASSET_NAME: latest.7z
-            DALAMUD_ARCHIVE_FILENAME: dalamud-latest.7z
+        outputs:
+            short_sha: ${{ steps.get-short-sha.outputs.short_sha }}
+            dotnet_sdk_version: ${{ steps.collect-results.outputs.dotnet_sdk_version }}
+            dalamud_digest: ${{ steps.resolve-dalamud-release.outputs.asset_digest }}
+            dalamud_release_tag: ${{ steps.resolve-dalamud-release.outputs.release_tag }}
+            dalamud_release_url: ${{ steps.resolve-dalamud-release.outputs.release_url }}
+            dalamud_cache_hit: ${{ steps.restore-dalamud-cache.outputs.cache-hit }}
+            format_outcome: ${{ steps.collect-results.outputs.format_outcome }}
+            build_outcome: ${{ steps.collect-results.outputs.build_outcome }}
+            format_log_b64: ${{ steps.collect-results.outputs.format_log_b64 }}
+            build_log_b64: ${{ steps.collect-results.outputs.build_log_b64 }}
+            plugin_version: ${{ steps.collect-results.outputs.plugin_version }}
+            dalamud_sdk_version: ${{ steps.collect-results.outputs.dalamud_sdk_version }}
+            roslynator_version: ${{ steps.collect-results.outputs.roslynator_version }}
+            assembly_name: ${{ steps.resolve-project.outputs.assembly_name }}
+            artifact_name: ${{ steps.resolve-project.outputs.assembly_name }}-${{ steps.get-short-sha.outputs.short_sha }}
+            artifact_id: ${{ steps.store-artifacts.outputs.artifact-id }}
 
         steps:
             - name: Checkout
@@ -30,10 +51,14 @@ jobs:
             - name: Install .NET
               uses: actions/setup-dotnet@v5
               with:
-                  dotnet-version: 10.0.x
+                  dotnet-version: ${{ env.DOTNET_VERSION }}
                   cache: true
-                  cache-dependency-path: |
-                      LegacyRelicAssistant/packages.lock.json
+                  cache-dependency-path: "**/packages.lock.json"
+
+            - name: Resolve Project
+              id: resolve-project
+              shell: pwsh
+              run: ./.github/scripts/pr-build/resolve-project.ps1
 
             # 解析 DalamudCN 最新 Release 的 latest.7z
             - name: Resolve Dalamud Release
@@ -41,9 +66,9 @@ jobs:
               shell: pwsh
               run: ./.github/scripts/pr-build/resolve-dalamud-release.ps1
 
-            - name: Cache Dalamud
-              id: cache-dalamud
-              uses: actions/cache@v4
+            - name: Restore Dalamud Cache
+              id: restore-dalamud-cache
+              uses: actions/cache/restore@v4
               with:
                   path: ${{ runner.temp }}/${{ env.DALAMUD_ARCHIVE_FILENAME }}
                   key: dalamud-latest-${{ steps.resolve-dalamud-release.outputs.asset_digest }}
@@ -51,26 +76,88 @@ jobs:
             - name: Install Dalamud
               shell: pwsh
               env:
-                  RUNNER_TEMP: ${{ runner.temp }}
-                  DALAMUD_CACHE_HIT: ${{ steps.cache-dalamud.outputs.cache-hit }}
+                  DALAMUD_CACHE_HIT: ${{ steps.restore-dalamud-cache.outputs.cache-hit }}
                   DALAMUD_DOWNLOAD_URL: ${{ steps.resolve-dalamud-release.outputs.download_url }}
               run: ./.github/scripts/pr-build/install-dalamud.ps1
+
+            - name: Save Dalamud Cache
+              if: steps.restore-dalamud-cache.outputs.cache-hit != 'true'
+              uses: actions/cache/save@v4
+              with:
+                  path: ${{ runner.temp }}/${{ env.DALAMUD_ARCHIVE_FILENAME }}
+                  key: ${{ steps.restore-dalamud-cache.outputs.cache-primary-key }}
 
             - name: Restore NuGet Packages
               run: dotnet restore --locked-mode
 
-            - name: Build
-              run: dotnet build -c Release -p:Platform=x64 --no-restore
+            - name: Verify Code Formatting
+              id: format-check
+              shell: pwsh
+              run: |
+                  dotnet format --verify-no-changes --verbosity minimal 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/format.log"
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-            - name: Get short SHA
+            - name: Build
+              id: compile
+              shell: pwsh
+              run: |
+                  dotnet build -c Release -p:Platform=x64 --no-restore -warnaserror 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/build.log"
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            - name: Collect Results
+              if: always()
+              id: collect-results
+              shell: pwsh
+              env:
+                  FORMAT_OUTCOME: ${{ steps.format-check.outcome }}
+                  BUILD_OUTCOME: ${{ steps.compile.outcome }}
+              run: ./.github/scripts/pr-build/collect-build-results.ps1
+
+            - name: Get Short SHA
               id: get-short-sha
               shell: pwsh
               run: echo "short_sha=$($env:GITHUB_SHA.Substring(0,7))" >> $env:GITHUB_OUTPUT
 
             - name: Store Artifacts
+              id: store-artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: LegacyRelicAssistant-${{ steps.get-short-sha.outputs.short_sha }}
-                  path: ./LegacyRelicAssistant/bin/x64/Release/LegacyRelicAssistant/
+                  name: ${{ steps.resolve-project.outputs.assembly_name }}-${{ steps.get-short-sha.outputs.short_sha }}
+                  path: ./${{ steps.resolve-project.outputs.artifact_path }}/
                   if-no-files-found: error
-                  retention-days: 1
+                  retention-days: 3
+
+    report:
+        name: PR Summary
+        runs-on: ubuntu-latest
+        needs: build
+
+        if: github.event_name == 'pull_request' && always()
+        steps:
+            - name: Checkout
+              if: needs.build.result != 'cancelled'
+              uses: actions/checkout@v5
+
+            - name: Publish PR Comment
+              uses: actions/github-script@v7
+              env:
+                  BUILD_RESULT: ${{ needs.build.result }}
+                  FORMAT_OUTCOME: ${{ needs.build.outputs.format_outcome }}
+                  BUILD_OUTCOME: ${{ needs.build.outputs.build_outcome }}
+                  FORMAT_LOG_B64: ${{ needs.build.outputs.format_log_b64 }}
+                  BUILD_LOG_B64: ${{ needs.build.outputs.build_log_b64 }}
+                  SHORT_SHA: ${{ needs.build.outputs.short_sha }}
+                  DOTNET_SDK_VERSION: ${{ needs.build.outputs.dotnet_sdk_version }}
+                  DALAMUD_DIGEST: ${{ needs.build.outputs.dalamud_digest }}
+                  DALAMUD_RELEASE_TAG: ${{ needs.build.outputs.dalamud_release_tag }}
+                  DALAMUD_RELEASE_URL: ${{ needs.build.outputs.dalamud_release_url }}
+                  DALAMUD_CACHE_HIT: ${{ needs.build.outputs.dalamud_cache_hit }}
+                  PLUGIN_VERSION: ${{ needs.build.outputs.plugin_version }}
+                  DALAMUD_SDK_VERSION: ${{ needs.build.outputs.dalamud_sdk_version }}
+                  ROSLYNATOR_VERSION: ${{ needs.build.outputs.roslynator_version }}
+                  ARTIFACT_NAME: ${{ needs.build.outputs.artifact_name }}
+                  ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+              with:
+                  script: |
+                      const publishComment = require('./.github/scripts/pr-build/publish-pr-comment.js');
+                      await publishComment({ github, context });

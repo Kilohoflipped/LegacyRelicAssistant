@@ -7,7 +7,7 @@ if (-not $env:GITHUB_OUTPUT) {
 
 $headers = @{
     Accept       = 'application/vnd.github+json'
-    'User-Agent' = 'LRA-CI'
+    'User-Agent' = 'PR-BUILD-CI'
 }
 $release = Invoke-RestMethod `
     -Uri $env:DALAMUD_RELEASE_API_URI `
@@ -20,3 +20,5 @@ $digest = if ($asset.digest -match '^sha256:(.+)$') { $Matches[1] } else { $asse
 
 "asset_digest=$digest" >> $env:GITHUB_OUTPUT
 "download_url=$($asset.browser_download_url)" >> $env:GITHUB_OUTPUT
+"release_tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
+"release_url=$($release.html_url)" >> $env:GITHUB_OUTPUT
